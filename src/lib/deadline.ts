@@ -6,6 +6,16 @@ export type DeadlineStatus =
   | 'today'
   | 'upcoming'
 
+export type DeadlineUrgency =
+  | 'submitted'
+  | 'overdue'
+  | 'critical'
+  | 'approaching'
+  | 'upcoming'
+
+const criticalDeadlineMs = 3 * 60 * 60 * 1000
+const approachingDeadlineMs = 24 * 60 * 60 * 1000
+
 const dateFormatter = new Intl.DateTimeFormat('vi-VN', {
   timeZone: 'Asia/Ho_Chi_Minh',
   day: '2-digit',
@@ -43,6 +53,32 @@ export function getDeadlineStatus(
     dateFormatter.format(now)
   ) {
     return 'today'
+  }
+
+  return 'upcoming'
+}
+
+// Classify urgency by elapsed time without changing calendar-day status.
+export function getDeadlineUrgency(
+  assignment: Assignment,
+  now: number
+): DeadlineUrgency {
+  if (assignment.submittedAt !== null) {
+    return 'submitted'
+  }
+
+  const remaining = new Date(assignment.dueAt).getTime() - now
+
+  if (remaining <= 0) {
+    return 'overdue'
+  }
+
+  if (remaining <= criticalDeadlineMs) {
+    return 'critical'
+  }
+
+  if (remaining <= approachingDeadlineMs) {
+    return 'approaching'
   }
 
   return 'upcoming'
