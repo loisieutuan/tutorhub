@@ -1,69 +1,121 @@
+import { useEffect, useState } from 'react'
 import {
   AlertCircle,
-  Atom,
   CalendarDays,
   ArrowRight,
-  Calculator,
   CheckCircle2,
   Clock,
+  FileImage,
+  FileText,
+  FileType,
   Gift,
-  Languages,
   ClipboardList,
 } from 'lucide-react'
 
 import AppLayout from './components/layout/AppLayout'
+import {
+  assignments,
+  type Assignment,
+} from './data/assignments'
+import {
+  formatDeadline,
+  getAssignmentStats,
+  getCountdownLabel,
+  getDeadlineStatus,
+  isSubmittedOnTime,
+  type DeadlineStatus,
+} from './lib/deadline'
 
-const assignments = [
-  {
-    subject: 'Toán học',
-    title: 'Bài tập phương trình bậc hai',
-    deadline: 'Hôm nay, 20:00',
-    status: 'Hạn hôm nay',
-    tone: 'urgent',
-    icon: Calculator,
-  },
-  {
-    subject: 'Tiếng Anh',
-    title: 'IELTS Writing Task 1',
-    deadline: 'Ngày mai, 21:00',
-    status: 'Đang thực hiện',
-    tone: 'warning',
-    icon: Languages,
-  },
-  {
-    subject: 'Vật lý',
-    title: 'Bài tập chương Điện học',
-    deadline: 'Thứ sáu, 20:00',
-    status: 'Chưa bắt đầu',
-    tone: 'neutral',
-    icon: Atom,
-  },
-] as const
+type AssignmentFilter = 'pending' | 'today' | 'overdue' | 'submitted' | 'all'
 
-const assignmentTones = {
-  urgent: {
+const deadlineTones: Record<DeadlineStatus, {
+  row: string
+  deadline: string
+  status: string
+}> = {
+  overdue: {
     row: 'border-red-200 bg-red-50/40',
     deadline: 'text-red-600',
     status: 'bg-red-50 text-red-700',
   },
-  warning: {
+  today: {
     row: 'border-amber-200',
     deadline: 'text-amber-700',
     status: 'bg-amber-50 text-amber-700',
   },
-  neutral: {
+  upcoming: {
     row: 'border-slate-200',
     deadline: 'text-slate-500',
     status: 'bg-slate-100 text-slate-600',
   },
-  complete: {
+  submitted: {
     row: 'border-green-200',
     deadline: 'text-green-700',
     status: 'bg-green-50 text-green-700',
   },
 }
 
+const filterTitles: Record<AssignmentFilter, string> = {
+  pending: 'Bài tập chưa nộp',
+  today: 'Bài tập hạn hôm nay',
+  overdue: 'Bài tập quá hạn',
+  submitted: 'Bài tập đã nộp',
+  all: 'Tất cả bài tập',
+}
+
+const emptyMessages: Record<AssignmentFilter, string> = {
+  pending: 'Bạn không có bài tập nào đang chờ nộp.',
+  today: 'Hôm nay không có bài tập đến hạn.',
+  overdue: 'Tuyệt vời! Bạn không có bài tập quá hạn.',
+  submitted: 'Bạn chưa có bài tập nào đã nộp.',
+  all: 'Chưa có bài tập nào.',
+}
+
 function App() {
+  const [now, setNow] = useState(() => Date.now())
+  const [filter, setFilter] = useState<AssignmentFilter>('pending')
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNow(Date.now())
+    }, 30_000)
+
+    return () => window.clearInterval(intervalId)
+  }, [])
+
+  const stats = getAssignmentStats(assignments, now)
+  const displayedAssignments = assignments
+    .filter((assignment) => {
+      const status = getDeadlineStatus(assignment, now)
+
+      switch (filter) {
+        case 'pending':
+          return assignment.submittedAt === null
+        case 'today':
+          return status === 'today'
+        case 'overdue':
+          return status === 'overdue'
+        case 'submitted':
+          return status === 'submitted'
+        case 'all':
+          return true
+      }
+    })
+    .slice()
+    .sort((first, second) => {
+      const firstStatus = getDeadlineStatus(first, now)
+      const secondStatus = getDeadlineStatus(second, now)
+
+      if (firstStatus === 'submitted' && secondStatus !== 'submitted') {
+        return 1
+      }
+      if (firstStatus !== 'submitted' && secondStatus === 'submitted') {
+        return -1
+      }
+
+      return new Date(first.dueAt).getTime() - new Date(second.dueAt).getTime()
+    })
+
   return (
     <AppLayout>
       <div className="space-y-8">
@@ -89,7 +141,7 @@ function App() {
             <div>
               <p className="text-xs text-red-700">Hạn nộp hôm nay</p>
               <p className="text-sm font-bold text-red-700">
-                1 bài tập · 20:00
+                {stats.today} bài tập đến hạn hôm nay
               </p>
             </div>
           </div>
@@ -98,41 +150,61 @@ function App() {
         {/* Stats */}
         <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
 
-          <div className="rounded-[11px] border border-border bg-white p-4 sm:p-5">
+          <button
+            type="button"
+            aria-pressed={filter === 'pending'}
+            onClick={() => setFilter('pending')}
+            className="w-full rounded-[11px] border border-border bg-white p-4 text-left sm:p-5"
+          >
             <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-primary">
               <ClipboardList size={21} />
             </div>
             <p className="text-sm text-slate-500">Chưa nộp</p>
-            <p className="mt-1 text-2xl font-extrabold text-slate-900">3</p>
+            <p className="mt-1 text-2xl font-extrabold text-slate-900">{stats.pending}</p>
             <p className="mt-2 text-xs font-medium text-slate-500">Bài tập đang chờ nộp</p>
-          </div>
+          </button>
 
-          <div className="rounded-[11px] border border-border bg-white p-4 sm:p-5">
+          <button
+            type="button"
+            aria-pressed={filter === 'today'}
+            onClick={() => setFilter('today')}
+            className="w-full rounded-[11px] border border-border bg-white p-4 text-left sm:p-5"
+          >
             <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
               <Clock size={21} />
             </div>
             <p className="text-sm text-slate-500">Hạn hôm nay</p>
-            <p className="mt-1 text-2xl font-extrabold text-slate-900">1</p>
-            <p className="mt-2 text-xs font-medium text-amber-700">Cần nộp trước 20:00</p>
-          </div>
+            <p className="mt-1 text-2xl font-extrabold text-slate-900">{stats.today}</p>
+            <p className="mt-2 text-xs font-medium text-amber-700">Bài tập cần nộp hôm nay</p>
+          </button>
 
-          <div className="rounded-[11px] border border-border bg-white p-4 sm:p-5">
+          <button
+            type="button"
+            aria-pressed={filter === 'overdue'}
+            onClick={() => setFilter('overdue')}
+            className="w-full rounded-[11px] border border-border bg-white p-4 text-left sm:p-5"
+          >
             <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-red-50 text-red-600">
               <AlertCircle size={21} />
             </div>
             <p className="text-sm text-slate-500">Quá hạn</p>
-            <p className="mt-1 text-2xl font-extrabold text-slate-900">0</p>
-            <p className="mt-2 text-xs font-medium text-slate-500">Không có bài quá hạn</p>
-          </div>
+            <p className="mt-1 text-2xl font-extrabold text-slate-900">{stats.overdue}</p>
+            <p className="mt-2 text-xs font-medium text-slate-500">Bài tập chưa nộp quá hạn</p>
+          </button>
 
-          <div className="rounded-[11px] border border-border bg-white p-4 sm:p-5">
+          <button
+            type="button"
+            aria-pressed={filter === 'submitted'}
+            onClick={() => setFilter('submitted')}
+            className="w-full rounded-[11px] border border-border bg-white p-4 text-left sm:p-5"
+          >
             <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-green-50 text-green-700">
               <CheckCircle2 size={21} />
             </div>
-            <p className="text-sm text-slate-500">Đã hoàn thành</p>
-            <p className="mt-1 text-2xl font-extrabold text-slate-900">18</p>
-            <p className="mt-2 text-xs font-medium text-green-700">Trong tháng này</p>
-          </div>
+            <p className="text-sm text-slate-500">Đã nộp</p>
+            <p className="mt-1 text-2xl font-extrabold text-slate-900">{stats.submitted}</p>
+            <p className="mt-2 text-xs font-medium text-green-700">Bài tập đã gửi</p>
+          </button>
 
         </section>
 
@@ -142,57 +214,78 @@ function App() {
           <div className="mb-6 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold text-slate-900">
-                Bài tập sắp đến hạn
+                {filterTitles[filter]}
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Danh sách và số liệu dưới đây chỉ mang tính minh họa.
+                Danh sách bài tập và hạn nộp của bạn
               </p>
             </div>
 
             <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-700">
-              1 hạn hôm nay
+              {displayedAssignments.length} bài tập
             </span>
           </div>
 
           <div className="space-y-3">
-            {assignments.map((assignment) => (
-              <div
-                key={assignment.title}
-                className={`flex flex-col gap-3 rounded-[11px] border p-4 transition-colors hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between ${assignmentTones[assignment.tone].row}`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
-                    <assignment.icon size={19} aria-hidden="true" />
-                  </div>
+            {displayedAssignments.length > 0 ? (
+              displayedAssignments.map((assignment) => {
+                const status = getDeadlineStatus(assignment, now)
+                const tone = deadlineTones[status]
+                const FileIcon = getFileIcon(assignment.fileType)
 
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-bold text-slate-900">
-                      {assignment.title}
-                    </h3>
-                    <p className="mt-1 text-xs font-medium text-slate-500">
-                      {assignment.subject}
-                    </p>
-                    <div className={`mt-2 flex items-center gap-1.5 text-xs font-medium ${assignmentTones[assignment.tone].deadline}`}>
-                      <CalendarDays size={14} />
-                      {assignment.deadline}
+                return (
+                  <div
+                    key={assignment.id}
+                    className={`flex flex-col gap-3 rounded-[11px] border p-4 transition-colors hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between ${tone.row}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+                        <FileIcon size={19} aria-hidden="true" />
+                      </div>
+
+                      <div className="min-w-0">
+                        <h3 className="text-sm font-bold text-slate-900">
+                          {assignment.title}
+                        </h3>
+                        <p className="mt-1 text-xs font-medium text-slate-500">
+                          {assignment.subject}
+                        </p>
+                        <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+                          <FileIcon size={13} aria-hidden="true" />
+                          {assignment.fileName}
+                        </p>
+                        <div className={`mt-2 flex items-center gap-1.5 text-xs font-medium ${tone.deadline}`}>
+                          <CalendarDays size={14} />
+                          Hạn nộp: {formatDeadline(assignment.dueAt)}
+                        </div>
+                        <div className={`mt-1 flex items-center gap-1.5 text-xs font-medium ${tone.deadline}`}>
+                          <Clock size={14} />
+                          {getCountdownLabel(assignment, now)}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 sm:justify-end">
+                      <span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${tone.status}`}>
+                        {getAssignmentStatusLabel(assignment, status)}
+                      </span>
+
+                      <ArrowRight size={18} className="text-slate-400" />
                     </div>
                   </div>
-                </div>
-
-                <div className="flex items-center justify-between gap-3 sm:justify-end">
-                  <span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${assignmentTones[assignment.tone].status}`}>
-                    {assignment.status}
-                  </span>
-
-                  <ArrowRight size={18} className="text-slate-400" />
-                </div>
-              </div>
-            ))}
+                )
+              })
+            ) : (
+              <p className="rounded-[11px] border border-dashed border-border px-4 py-8 text-center text-sm text-slate-500">
+                {emptyMessages[filter]}
+              </p>
+            )}
           </div>
 
           <div className="mt-5 flex justify-center">
             <button
               type="button"
+              onClick={() => setFilter('all')}
               className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-primary transition-colors hover:bg-blue-50"
             >
               Xem tất cả bài tập
@@ -262,6 +355,38 @@ function App() {
       </div>
     </AppLayout>
   )
+}
+
+function getFileIcon(fileType: Assignment['fileType']) {
+  switch (fileType) {
+    case 'image':
+      return FileImage
+    case 'pdf':
+      return FileText
+    case 'word':
+      return FileType
+  }
+}
+
+function getAssignmentStatusLabel(
+  assignment: Assignment,
+  status: DeadlineStatus,
+) {
+  if (status === 'submitted') {
+    return isSubmittedOnTime(assignment) === true
+      ? 'Đã nộp đúng hạn'
+      : 'Đã nộp trễ'
+  }
+
+  if (status === 'overdue') {
+    return 'Quá hạn'
+  }
+
+  if (status === 'today') {
+    return 'Hạn hôm nay'
+  }
+
+  return 'Chưa đến hạn'
 }
 
 function GiftIcon() {
