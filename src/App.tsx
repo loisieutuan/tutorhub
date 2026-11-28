@@ -1,7 +1,8 @@
 
 import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
-
+import TutorAssignmentForm from './components/assignments/TutorAssignmentForm'
+import TutorGrading from './pages/TutorGrading'
 import {
   Navigate,
   Route,
@@ -24,6 +25,8 @@ import {
   type UserProfile,
 } from './lib/auth'
 
+import { loadAssignments, type Assignment } from './data/assignments'
+import { messageOf } from './lib/submission'
 import AppLayout from './components/layout/AppLayout'
 import LoginPage from './pages/LoginPage'
 import StudentDashboard from './pages/StudentDashboard'
@@ -209,7 +212,8 @@ function RoleHome({
         </div>
 
         <AccountBar profile={profile} />
-
+        {tutor && <TutorAssignmentForm tutorId={profile.id} />}
+        {tutor && <TutorGrading tutorId={profile.id} />}
         <section className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
 
           <p className="text-sm font-semibold text-primary">
@@ -355,34 +359,57 @@ function SignedInApp({
     )
   }
 
-  // Student Dashboard
+  return <StudentArea profile={profile} />
+}
+
+function StudentArea({ profile }: { profile: UserProfile }) {
+  const [assignments, setAssignments] = useState<Assignment[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [attempt, setAttempt] = useState(0)
+  useEffect(() => {
+    let active = true
+    loadAssignments(profile.id)
+      .then(rows => { if (active) setAssignments(rows) })
+      .catch(reason => { if (active) setError(messageOf(reason)) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [profile.id, attempt])
+
+  function rememberDraft(assignmentId: string, submissionId: string) {
+    setAssignments(rows => rows.map(row => row.id === assignmentId ? { ...row, submissionId } : row))
+  }
+
+  function reloadAssignments() {
+    setLoading(true)
+    setError('')
+    setAttempt(value => value + 1)
+  }
 
   return (
-    <AppLayout>
-
+    <AppLayout name={profile.full_name}>
       <AccountBar profile={profile} />
-
-      <p className="mb-6 rounded-lg bg-blue-50 p-3 text-xs leading-5 text-slate-600">
-        Tài khoản đăng nhập là tài khoản Supabase.
-        Nội dung học tập và hồ sơ học sinh trong
-        Dashboard bên dưới vẫn là dữ liệu minh họa.
-      </p>
-
+      {loading ? <p role="status">Đang tải bài tập…</p> : error ? (
+        <section role="alert">
+          <p>{error}</p>
+          <button onClick={() => { setLoading(true); setError(''); setAttempt(n => n + 1) }}>Thử lại</button>
+        </section>
+      ) : (
       <Routes>
 
         <Route
           path="/"
-          element={<StudentDashboard />}
+          element={<StudentDashboard assignments={assignments} name={profile.full_name} />}
         />
 
         <Route
           path="/assignments"
-          element={<AssignmentsPage />}
+          element={<AssignmentsPage assignments={assignments} />}
         />
 
         <Route
           path="/assignments/:assignmentId"
-          element={<AssignmentDetailPage />}
+          element={<AssignmentDetailPage assignments={assignments} onDraft={rememberDraft} onChanged={reloadAssignments} />}
         />
 
         <Route
@@ -392,6 +419,7 @@ function SignedInApp({
 
       </Routes>
 
+      )}
     </AppLayout>
   )
 }

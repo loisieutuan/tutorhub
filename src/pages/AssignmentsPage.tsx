@@ -13,13 +13,10 @@ import {
   FileType,
 } from 'lucide-react'
 
-import {
-  assignments,
-  type Assignment,
-} from '../data/assignments'
+import type { Assignment } from '../data/assignments'
 
 import {
-  formatDeadline,
+  attemptLabel, withdrawalLabel, formatDeadline,
   getAssignmentStats,
   getCountdownLabel,
   getDeadlineStatus,
@@ -58,12 +55,14 @@ const fileLabels: Record<Assignment['fileType'], string> = {
   image: 'Hình ảnh',
   pdf: 'PDF',
   word: 'Word',
+  other: 'Tệp đề',
 }
 
 const fileIcons = {
   image: FileImage,
   pdf: FileText,
   word: FileType,
+  other: FileText,
 }
 
 const urgencyStyles: Record<
@@ -168,7 +167,7 @@ function compareAssignments(
   return difference || first.id.localeCompare(second.id)
 }
 
-function AssignmentsPage() {
+function AssignmentsPage({ assignments }: { assignments: Assignment[] }) {
   const [query, setQuery] = useState('')
   const [subject, setSubject] = useState('')
 
@@ -513,7 +512,9 @@ function AssignmentsPage() {
             now,
           )
 
-          const style = urgencyStyles[urgency]
+          const style = assignment.returnedAt
+            ? { ...urgencyStyles[urgency], border: 'border-l-cyan-600' }
+            : urgencyStyles[urgency]
           const FileIcon = fileIcons[assignment.fileType]
 
           const submitted =
@@ -525,10 +526,8 @@ function AssignmentsPage() {
             submitted && onTime === false
 
           const statusLabel = submitted
-            ? onTime === true
-              ? 'Đã nộp đúng hạn'
-              : 'Đã nộp trễ'
-            : style.label
+            ? attemptLabel(assignment.submittedAt!, assignment.submissionDeadline ?? assignment.dueAt)
+            : withdrawalLabel(assignment, urgency === 'overdue') || style.label
 
           return (
             <article
@@ -551,9 +550,13 @@ function AssignmentsPage() {
                   </p>
 
                   <h3 className="mt-1 break-words font-semibold text-slate-900">
-                    {assignment.title}
-                  </h3>
-
+  <Link
+    to={`/assignments/${encodeURIComponent(assignment.id)}`}
+    className="inline-block rounded-sm text-primary transition-colors hover:text-blue-800 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+  >
+    {assignment.title}
+  </Link>
+</h3>
                   <p className="mt-1 break-all text-xs text-slate-500">
                     Đề bài: {assignment.fileName}
                   </p>
@@ -585,6 +588,7 @@ function AssignmentsPage() {
                   {statusLabel}
                 </span>
 
+                {assignment.returnedAt && <p className="mt-2 text-sm font-bold text-cyan-800">Đã chấm bài</p>}
                 {assignment.submittedAt !== null ? (
                   <p className="mt-2 text-xs leading-relaxed text-slate-500">
                     Đã gửi:{' '}
@@ -640,10 +644,6 @@ function AssignmentsPage() {
         )}
       </section>
 
-      <p className="text-center text-xs leading-relaxed text-slate-500">
-        Dữ liệu minh họa · Chức năng mở đề và nộp tệp sẽ
-        được bổ sung ở bước sau.
-      </p>
     </div>
   )
 }

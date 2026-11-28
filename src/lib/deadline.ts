@@ -162,6 +162,18 @@ export function isSubmittedOnTime(
 
   return (
     new Date(assignment.submittedAt).getTime() <=
-    new Date(assignment.dueAt).getTime()
+    new Date(assignment.submissionDeadline ?? assignment.dueAt).getTime()
   )
+}
+
+export function attemptLabel(submitted: string, due: string) {
+  const lateMs = Date.parse(submitted) - Date.parse(due)
+  if (lateMs <= 0) return 'Đã nộp đúng hạn'
+  if (lateMs < 60000) return 'Nộp trễ dưới 1 phút'
+  return `Nộp trễ ${Math.floor(lateMs / 60000)} phút`
+}
+
+export function withdrawalLabel(a: Assignment, overdue: boolean) {
+  if (a.submittedAt || !a.history.length) return ''
+  return overdue ? 'Quá hạn · Chưa nộp lại' : 'Đã rút · Chờ nộp lại'
 }

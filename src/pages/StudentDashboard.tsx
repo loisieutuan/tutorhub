@@ -11,20 +11,17 @@ import {
   FileType,
   Gift,
   ClipboardList,
+  ClipboardCheck,
 } from 'lucide-react'
 
-import {
-  assignments,
-  type Assignment,
-} from '../data/assignments'
+import type { Assignment } from '../data/assignments'
 
 import {
-  formatDeadline,
+  attemptLabel, withdrawalLabel, formatDeadline,
   getAssignmentStats,
   getCountdownLabel,
   getDeadlineStatus,
   getDeadlineUrgency,
-  isSubmittedOnTime,
   type DeadlineUrgency,
 } from '../lib/deadline'
 
@@ -34,6 +31,7 @@ type AssignmentFilter =
   | 'overdue'
   | 'upcoming'
   | 'submitted'
+  | 'graded'
   | 'all'
 
 const urgencyTones: Record<
@@ -86,6 +84,7 @@ const quickFilters: {
   { value: 'today', label: 'Hôm nay' },
   { value: 'upcoming', label: 'Sắp tới' },
   { value: 'submitted', label: 'Đã nộp' },
+  { value: 'graded', label: 'Đã chấm bài' },
 ]
 
 const emptyMessages: Record<AssignmentFilter, string> = {
@@ -93,11 +92,12 @@ const emptyMessages: Record<AssignmentFilter, string> = {
   today: 'Hôm nay không có bài tập đến hạn.',
   overdue: 'Tuyệt vời! Bạn không có bài tập quá hạn.',
   upcoming: 'Bạn không có bài tập sắp tới.',
+  graded: 'Chưa có bài nào được gia sư trả kết quả.',
   submitted: 'Bạn chưa có bài tập nào đã nộp.',
   all: 'Chưa có bài tập nào.',
 }
 
-function StudentDashboard() {
+function StudentDashboard({ assignments, name }: { assignments: Assignment[]; name: string }) {
   const [now, setNow] = useState(() => Date.now())
 
   const [filter, setFilter] =
@@ -130,6 +130,9 @@ function StudentDashboard() {
         case 'upcoming':
           return status === 'upcoming'
 
+        case 'graded':
+          return Boolean(assignment.returnedAt)
+
         case 'submitted':
           return status === 'submitted'
 
@@ -139,6 +142,9 @@ function StudentDashboard() {
     })
     .slice()
     .sort((first, second) => {
+      if (filter === 'graded' && first.returnedAt && second.returnedAt) {
+        return Date.parse(second.returnedAt) - Date.parse(first.returnedAt)
+      }
       const firstStatus = getDeadlineStatus(first, now)
       const secondStatus = getDeadlineStatus(second, now)
 
@@ -169,11 +175,11 @@ function StudentDashboard() {
         <section className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
           <div>
             <p className="mb-2 text-sm font-medium text-primary">
-              Thứ hai · Chào buổi học mới!
+              Deadline Center
             </p>
 
             <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
-              Xin chào, An.
+              Xin chào, {name}.
             </h1>
 
             <p className="mt-2 text-sm text-slate-500 sm:text-base">
@@ -201,18 +207,18 @@ function StudentDashboard() {
         </section>
 
         {/* Stats */}
-        <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
           <button
             type="button"
             aria-pressed={filter === 'pending'}
             onClick={() => setFilter('pending')}
-            className="w-full rounded-[11px] border border-border bg-white p-4 text-left sm:p-5"
+            className="w-full rounded-[11px] border border-blue-200 bg-blue-50 p-4 text-left transition-colors hover:bg-blue-100 aria-pressed:border-blue-600 aria-pressed:ring-2 aria-pressed:ring-blue-600 focus-visible:outline-2 focus-visible:outline-offset-4 sm:p-5"
           >
-            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-primary">
+            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-800">
               <ClipboardList size={21} />
             </div>
 
-            <p className="text-sm text-slate-500">
+            <p className="text-sm font-semibold text-blue-900">
               Chưa nộp
             </p>
 
@@ -220,7 +226,7 @@ function StudentDashboard() {
               {stats.pending}
             </p>
 
-            <p className="mt-2 text-xs font-medium text-slate-500">
+            <p className="mt-2 text-xs font-medium text-blue-800">
               Bài tập đang chờ nộp
             </p>
           </button>
@@ -229,13 +235,13 @@ function StudentDashboard() {
             type="button"
             aria-pressed={filter === 'today'}
             onClick={() => setFilter('today')}
-            className="w-full rounded-[11px] border border-border bg-white p-4 text-left sm:p-5"
+            className="w-full rounded-[11px] border border-amber-200 bg-amber-50 p-4 text-left transition-colors hover:bg-amber-100 aria-pressed:border-amber-600 aria-pressed:ring-2 aria-pressed:ring-amber-600 focus-visible:outline-2 focus-visible:outline-offset-4 sm:p-5"
           >
-            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
+            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
               <Clock size={21} />
             </div>
 
-            <p className="text-sm text-slate-500">
+            <p className="text-sm font-semibold text-amber-900">
               Hạn hôm nay
             </p>
 
@@ -243,7 +249,7 @@ function StudentDashboard() {
               {stats.today}
             </p>
 
-            <p className="mt-2 text-xs font-medium text-amber-700">
+            <p className="mt-2 text-xs font-medium text-amber-800">
               Bài tập cần nộp hôm nay
             </p>
           </button>
@@ -252,13 +258,13 @@ function StudentDashboard() {
             type="button"
             aria-pressed={filter === 'overdue'}
             onClick={() => setFilter('overdue')}
-            className="w-full rounded-[11px] border border-border bg-white p-4 text-left sm:p-5"
+            className="w-full rounded-[11px] border border-red-200 bg-red-50 p-4 text-left transition-colors hover:bg-red-100 aria-pressed:border-red-600 aria-pressed:ring-2 aria-pressed:ring-red-600 focus-visible:outline-2 focus-visible:outline-offset-4 sm:p-5"
           >
-            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-red-50 text-red-600">
+            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-red-100 text-red-800">
               <AlertCircle size={21} />
             </div>
 
-            <p className="text-sm text-slate-500">
+            <p className="text-sm font-semibold text-red-900">
               Quá hạn
             </p>
 
@@ -266,7 +272,7 @@ function StudentDashboard() {
               {stats.overdue}
             </p>
 
-            <p className="mt-2 text-xs font-medium text-slate-500">
+            <p className="mt-2 text-xs font-medium text-red-800">
               Bài tập chưa nộp quá hạn
             </p>
           </button>
@@ -275,13 +281,13 @@ function StudentDashboard() {
             type="button"
             aria-pressed={filter === 'submitted'}
             onClick={() => setFilter('submitted')}
-            className="w-full rounded-[11px] border border-border bg-white p-4 text-left sm:p-5"
+            className="w-full rounded-[11px] border border-green-200 bg-green-50 p-4 text-left transition-colors hover:bg-green-100 aria-pressed:border-green-600 aria-pressed:ring-2 aria-pressed:ring-green-600 focus-visible:outline-2 focus-visible:outline-offset-4 sm:p-5"
           >
-            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-green-50 text-green-700">
+            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 text-green-800">
               <CheckCircle2 size={21} />
             </div>
 
-            <p className="text-sm text-slate-500">
+            <p className="text-sm font-semibold text-green-900">
               Đã nộp
             </p>
 
@@ -289,8 +295,31 @@ function StudentDashboard() {
               {stats.submitted}
             </p>
 
-            <p className="mt-2 text-xs font-medium text-green-700">
+            <p className="mt-2 text-xs font-medium text-green-800">
               Bài tập đã gửi
+            </p>
+          </button>
+
+          <button
+            type="button"
+            aria-pressed={filter === 'graded'}
+            onClick={() => setFilter('graded')}
+            className="w-full rounded-[11px] border border-cyan-200 bg-cyan-50 p-4 text-left transition-colors hover:bg-cyan-100 aria-pressed:border-cyan-600 aria-pressed:ring-2 aria-pressed:ring-cyan-600 focus-visible:outline-2 focus-visible:outline-offset-4 sm:p-5"
+          >
+            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-100 text-cyan-800">
+              <ClipboardCheck size={21} />
+            </div>
+
+            <p className="text-sm font-semibold text-cyan-900">
+              Đã chấm bài
+            </p>
+
+            <p className="mt-1 text-2xl font-extrabold text-slate-900">
+              {assignments.filter(a => a.returnedAt).length}
+            </p>
+
+            <p className="mt-2 text-xs font-medium text-cyan-800">
+              Gia sư đã trả kết quả
             </p>
           </button>
         </section>
@@ -354,7 +383,9 @@ function StudentDashboard() {
                   now,
                 )
 
-                const tone = urgencyTones[urgency]
+                const tone = assignment.returnedAt
+                  ? { ...urgencyTones[urgency], indicator: 'border-l-cyan-600', icon: 'bg-cyan-50 text-cyan-800', countdown: 'text-cyan-800' }
+                  : urgencyTones[urgency]
 
                 const FileIcon = getFileIcon(
                   assignment.fileType,
@@ -378,7 +409,7 @@ function StudentDashboard() {
 
                       <div className="min-w-0">
                         <h3 className="text-sm font-bold leading-5 text-slate-900">
-                          {assignment.title}
+                          <Link to={`/assignments/${assignment.id}`}>{assignment.title}</Link>
                         </h3>
 
                         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
@@ -416,10 +447,10 @@ function StudentDashboard() {
                         <p
                           className={`text-sm font-semibold tabular-nums ${tone.countdown}`}
                         >
-                          Đã nộp
-                          {assignment.submittedAt
+                          {assignment.returnedAt ? 'Đã chấm bài' : 'Đã nộp'}
+                          {(assignment.returnedAt || assignment.submittedAt)
                             ? ` · ${formatDeadline(
-                                assignment.submittedAt,
+                                (assignment.returnedAt ?? assignment.submittedAt)!,
                               )}`
                             : ''}
                         </p>
@@ -445,6 +476,12 @@ function StudentDashboard() {
                           urgency,
                         )}
                       </span>
+                      {assignment.returnedAt && (
+                        <Link to={`/assignments/${assignment.id}`}
+                          className="rounded-lg bg-cyan-50 px-3 py-2 text-xs font-semibold text-cyan-800 hover:bg-cyan-100">
+                          Xem kết quả chấm
+                        </Link>
+                      )}
                     </div>
                   </div>
                 )
@@ -472,7 +509,7 @@ function StudentDashboard() {
         <section className="grid gap-5 lg:grid-cols-2">
           <div className="rounded-[11px] border border-border bg-white p-5 sm:p-6">
             <h2 className="text-lg font-bold text-slate-900">
-              Tiến độ học tập
+              Tiến độ học tập (minh họa)
             </h2>
 
             <p className="mt-1 text-sm text-slate-500">
@@ -541,6 +578,9 @@ function getFileIcon(fileType: Assignment['fileType']) {
     case 'pdf':
       return FileText
 
+    case 'other':
+      return FileText
+
     case 'word':
       return FileType
   }
@@ -554,6 +594,9 @@ function getFileTypeLabel(fileType: Assignment['fileType']) {
     case 'pdf':
       return 'PDF'
 
+    case 'other':
+      return 'Tệp đề'
+
     case 'word':
       return 'Word'
   }
@@ -564,10 +607,11 @@ function getAssignmentStatusLabel(
   urgency: DeadlineUrgency,
 ) {
   if (urgency === 'submitted') {
-    return isSubmittedOnTime(assignment) === true
-      ? 'Đã nộp đúng hạn'
-      : 'Đã nộp trễ'
+    return attemptLabel(assignment.submittedAt!, assignment.submissionDeadline ?? assignment.dueAt)
   }
+
+  const withdrawn = withdrawalLabel(assignment, urgency === 'overdue')
+  if (withdrawn) return withdrawn
 
   if (urgency === 'overdue') {
     return 'Quá hạn'

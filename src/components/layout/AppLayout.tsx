@@ -16,6 +16,7 @@ import {
 
 type AppLayoutProps = {
   children: ReactNode
+  name: string
 }
 
 // Menu trên máy tính.
@@ -82,7 +83,8 @@ const mobileNavigationItems = [
   },
 ]
 
-function AppLayout({ children }: AppLayoutProps) {
+function AppLayout({ children, name }: AppLayoutProps) {
+  const initials = name.trim().split(/\s+/).slice(-2).map(word => word[0]).join('').toUpperCase()
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Desktop Sidebar */}
@@ -107,16 +109,16 @@ function AppLayout({ children }: AppLayoutProps) {
         {/* Student profile */}
         <div className="mx-4 mt-6 flex items-center gap-3 rounded-[11px] bg-blue-50 p-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">
-            AN
+            {initials}
           </div>
 
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-bold text-slate-800">
-              Nguyễn An
+              {name}
             </p>
 
             <p className="text-xs text-slate-500">
-              Học sinh · Level 5
+              Học sinh
             </p>
           </div>
         </div>
@@ -250,7 +252,7 @@ function AppLayout({ children }: AppLayoutProps) {
 
             {/* Avatar */}
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">
-              AN
+              {initials}
             </div>
           </div>
         </header>

@@ -1,69 +1,46 @@
+import { supabase } from '../lib/supabase'
+
 export type Assignment = {
   id: string
   title: string
   subject: string
   description: string
   fileName: string
-  fileType: 'image' | 'pdf' | 'word'
+  fileType: 'image' | 'pdf' | 'word' | 'other'
+  attachments: { original_name: string; storage_path: string }[]
   assignedAt: string
   dueAt: string
+  allowLate: boolean
+  submissionId: string | null
+  submissionDeadline: string | null
+  history: { submitted_at: string; due_at: string; withdrawn_at: string }[]
+  returnedAt: string | null
   submittedAt: string | null
 }
 
-export const assignments: Assignment[] = [
-  {
-    id: 'ASG-001',
-    title: 'Bài tập phương trình bậc hai',
-    subject: 'Toán học',
-    description: 'Hoàn thành toàn bộ bài tập trong file đề.',
-    fileName: 'phuong-trinh-bac-hai.pdf',
-    fileType: 'pdf',
-    assignedAt: '2026-11-23T08:00:00+07:00',
-    dueAt: '2026-11-26T20:00:00+07:00',
-    submittedAt: null,
-  },
-  {
-    id: 'ASG-002',
-    title: 'IELTS Writing Task 1',
-    subject: 'Tiếng Anh',
-    description: 'Viết bài hoàn chỉnh theo yêu cầu trong đề.',
-    fileName: 'ielts-writing-task-1.docx',
-    fileType: 'word',
-    assignedAt: '2026-11-24T08:00:00+07:00',
-    dueAt: '2026-11-27T20:00:00+07:00',
-    submittedAt: null,
-  },
-  {
-    id: 'ASG-003',
-    title: 'Bài tập chương Điện học',
-    subject: 'Vật lý',
-    description: 'Giải các bài tập và trình bày lời giải đầy đủ.',
-    fileName: 'bai-tap-dien-hoc.jpg',
-    fileType: 'image',
-    assignedAt: '2026-11-27T08:00:00+07:00',
-    dueAt: '2026-11-29T20:00:00+07:00',
-    submittedAt: null,
-  },
-  {
-    id: 'ASG-004',
-    title: 'Ôn tập hàm số',
-    subject: 'Toán học',
-    description: 'Hoàn thành bài ôn tập hàm số.',
-    fileName: 'on-tap-ham-so.pdf',
-    fileType: 'pdf',
-    assignedAt: '2026-11-22T08:00:00+07:00',
-    dueAt: '2026-11-25T20:00:00+07:00',
-    submittedAt: '2026-11-25T18:30:00+07:00',
-  },
-  {
-    id: 'ASG-005',
-    title: 'Bài tập ngữ pháp Unit 4',
-    subject: 'Tiếng Anh',
-    description: 'Hoàn thành các bài tập trong tài liệu.',
-    fileName: 'grammar-unit-4.docx',
-    fileType: 'word',
-    assignedAt: '2026-11-23T08:00:00+07:00',
-    dueAt: '2026-11-26T20:00:00+07:00',
-    submittedAt: '2026-11-26T21:15:00+07:00',
-  },
-]
+export async function loadAssignments(studentId: string): Promise<Assignment[]> {
+  const { data, error } = await supabase.from('assignments')
+    .select('*, subjects(name), assignment_files(original_name,storage_path), submissions(id,submitted_at,due_at_when_submitted,grades(returned_at)), withdrawn_submissions(submitted_at,due_at,withdrawn_at)')
+    .eq('student_id', studentId).order('due_at')
+  if (error) throw error
+
+  return (data ?? []).filter(row => !row.is_archived && !row.archived_at).map(row => {
+    const attachments: Assignment['attachments'] = row.assignment_files ?? []
+    const name = attachments[0]?.original_name ?? ''
+    const extension = name.split('.').pop()?.toLowerCase() ?? ''
+    const current = [row.submissions].flat()[0]
+    const history: Assignment['history'] = row.withdrawn_submissions ?? []
+    history.sort((a,b) => Date.parse(b.withdrawn_at) - Date.parse(a.withdrawn_at))
+    return {
+      id: row.id, title: row.title, subject: row.subjects?.name ?? 'Chưa có môn học',
+      description: row.description ?? '', attachments,
+      fileName: name || 'Chưa có tệp đề',
+      fileType: /^(png|jpe?g|webp|heic|heif)$/.test(extension) ? 'image'
+        : extension === 'pdf' ? 'pdf' : /^docx?$/.test(extension) ? 'word' : 'other',
+      assignedAt: row.assigned_at ?? row.created_at, dueAt: row.due_at,
+      allowLate: row.allow_late_submission === true, submissionId: current?.id ?? null,
+      returnedAt: current?.submitted_at ? [current.grades].flat()[0]?.returned_at ?? null : null,
+      submittedAt: current?.submitted_at ?? null, submissionDeadline: current?.due_at_when_submitted ?? null, history,
+    }
+  })
+}
